@@ -1,10 +1,10 @@
 function under_bash () {
-	[[ "`ps -p $$ | tail -1|awk '{print $NF}'`" == "-bash" ]] 2>&1 && return
+	[[ "`ps -p $$ --no-headers -o comm`" == "bash" ]] 2>&1 && return
 	return 1
 }
 
 function under_zsh () {
-	[[ "`ps -p $$ | tail -1|awk '{print $NF}'`" == "-zsh" ]] 2>&1 && return
+	[[ "`ps -p $$ --no-headers -o comm`" == "zsh" ]] 2>&1 && return
 	return 1
 }
 
@@ -51,8 +51,29 @@ msgp_promptchar_zsh='%%' # the % character is special in zsh - escape with a pre
 msgp_promptchar_git='±'
 #############################################
 
+# obtained from /usr/share/doc/git-1.8.1.2/contrib/completion/git-prompt.sh (as __gitdir)
+function get_git_dir ()
+{
+	if [ -z "${1-}" ]; then
+			if [ -n "${__git_dir-}" ]; then
+					echo "$__git_dir"
+			elif [ -n "${GIT_DIR-}" ]; then
+					test -d "${GIT_DIR-}" || return 1
+					echo "$GIT_DIR"
+			elif [ -d .git ]; then
+					echo .git
+			else
+					git rev-parse --git-dir 2>/dev/null
+			fi
+	elif [ -d "$1/.git" ]; then
+			echo "$1/.git"
+	else
+			echo "$1"
+	fi
+}
+
 function in_git_repo {
-	git branch > /dev/null 2>&1 && return
+	get_git_dir 2>&1 1> /dev/null && return
 	return 1
 }
 
@@ -70,28 +91,13 @@ function prompt_char {
 	fi
 }
 
-function location_title {
-	if in_repo; then
-		local root=$(get_repo_root)
-		local uroot="$(get_unversioned_repo_root)/"
-		echo "${root/$uroot/} ($(get_repo_type))"
-	else
-		echo "${PWD/$HOME/~}"
-	fi
-}
-
 function get_repo_type {
 	in_git_repo && echo -ne "git" && return
 	return 1
 }
 
 function get_repo_branch {
-	in_git_repo && echo $(git branch | grep '*' | cut -d ' ' -f 2) && return
-	return 1
-}
-
-function get_main_branch_name () {
-	in_git_repo && echo "master" && return
+	in_git_repo && echo $(git describe --contains --all HEAD 2>/dev/null) && return
 	return 1
 }
 
@@ -119,13 +125,13 @@ function get_unversioned_repo_root {
 
 	# see if $repo_root is non-existent or empty, and if so, assign
 	if test ! -s "$repo_root"; then
-	    echo $lpath
+		echo $lpath
 	else
 		local parent="${lpath%/*}"
 		get_unversioned_repo_root "$parent"
 	fi
 
-    cd "$cPWD" &> /dev/null
+	cd "$cPWD" &> /dev/null
 }
 
 # display current path
