@@ -240,12 +240,78 @@ function repo_status {
 	echo -e "$msgp_root_color$root$msgp_repo_color$lpath$msgp_branch_color$branch$msgp_dirty_color$update$changes"
 }
 
+# obtained from /usr/share/doc/git-1.8.1.2/contrib/completion/git-prompt.sh (as __git_ps1)
+function get_current_repo_action () {
+	if in_git_repo; then
+		local g="$(get_git_dir)"
+		local action
+		local branch
+		if [ -f "$g/rebase-merge/interactive" ]; then
+			branch=$(cat "$g/rebase-merge/head-name")
+			if under_zsh; then
+				branch="%{\033[4m%}${branch}%{\033[0m%}"
+			elif under_bash; then
+				branch="\033[4m${branch}\033[0m"
+			fi
+			action="interactive rebasing on ${branch}"
+		elif [ -d "$g/rebase-merge" ]; then
+			branch=$(cat "$g/rebase-merge/head-name")
+			if under_zsh; then
+				branch="%{\033[4m%}${branch}%{\033[0m%}"
+			elif under_bash; then
+				branch="\033[4m${branch}\033[0m"
+			fi
+			action="merge rebasing on ${branch}"
+		else
+			if [ -d "$g/rebase-apply" ]; then
+				if [ -f "$g/rebase-apply/rebasing" ]; then
+					action="rebasing"
+				elif [ -f "$g/rebase-apply/applying" ]; then
+					action="applying patch"
+				else
+					action="applying patch or rebasing"
+				fi
+			elif [ -f "$g/MERGE_HEAD" ]; then
+					action="merging"
+			elif [ -f "$g/CHERRY_PICK_HEAD" ]; then
+					action="cherry-picking"
+			elif [ -f "$g/BISECT_LOG" ]; then
+					action="bisecting"
+			fi
+		fi
+		if [ -n "$action" ]; then
+			if under_zsh; then
+				echo -e "$msgp_dirty_color$action$msgp_dirty_color%{$msgp_reset_color%}"
+			elif under_bash; then
+				echo -e "$msgp_dirty_color[$action$msgp_dirty_color]$msgp_reset_color"
+			fi
+		else
+			echo -e "($(git rev-parse --short HEAD 2>/dev/null)) "
+		fi
+	else
+		return 1
+	fi
+}
+
 function construct_prompt () {
-	echo -e "$msgp_user_color$USER ${msgp_preposition_color}at $msgp_host_color`hostname -s` ${msgp_preposition_color}in $(ps_status)$msgp_promptchar_color\n$(prompt_char)"
+	echo -e "$msgp_user_color$USER ${msgp_preposition_color}at $msgp_host_color`hostname -s` ${msgp_preposition_color}in $(ps_status)$msgp_reset_color\n$(get_current_repo_action)$msgp_promptchar_color$(prompt_char)"
+}
+
+function get_last_status {
+	local st="$?"
+	if under_bash; then
+		if [[ "$st" == "0" ]]; then
+			echo -e "$msgp_color_green✔$reset_color "
+		else
+			echo -e "$msgp_color_red✖$reset_color "
+		fi
+	elif under_zsh; then
+		echo -e "%(?.$msgp_color_green✔.$msgp_color_red✖)$reset_color "
+	fi
 }
 
 if under_bash; then
-	export PS1='$(construct_prompt)\[$msgp_reset_color\] '
+	export PS1='$(get_last_status)$(construct_prompt)\[$msgp_reset_color\] '
 elif under_zsh; then
-	PROMPT='$(construct_prompt)%{$msgp_reset_color%} '
+	export PROMPT='$(get_last_status)$(construct_prompt)%{$msgp_reset_color%} '
 fi
